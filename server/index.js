@@ -4,6 +4,14 @@ import morgan from "morgan";
 import helmet from "helmet";
 import yup from "yup";
 import { nanoid } from "nanoid";
+import monk from "monk";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const db = monk(process.env.MONGO_URI);
+const urls = db.get('urls');
+urls.createIndex('name');
 
 const app = express();
 
@@ -36,12 +44,19 @@ app.post('/url', async (req, res, next) => {
         });
         if (!slug) {
             slug = nanoid(5);
+        } else {
+            const existing = await urls.findOne({ slug });
+            if (existing) {
+                throw new Error('Slug in use 🍔');
+            }
         }
         slug = slug.toLowerCase();
-        res.json({
-            slug,
-            url
-        });
+        const newUrl = {
+            url,
+            slug
+        };
+        const created = await urls.insert(newUrl);
+        res.json(created); 
     } catch (error) {
         next(error);
     }
