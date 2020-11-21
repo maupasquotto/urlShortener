@@ -11,7 +11,7 @@ dotenv.config();
 
 const db = monk(process.env.MONGO_URI);
 const urls = db.get('urls');
-urls.createIndex('name');
+urls.createIndex({ slug: 1 }, { unique: true });
 
 const app = express();
 
@@ -19,14 +19,23 @@ app.use(helmet());
 app.use(morgan('tiny'));
 app.use(cors());
 app.use(express.json());
-app.use(express.static('./public'));
+app.use(express.static('./public', {
+    setHeaders: function (res, path, stat) {
+        res.set('Content-Security-Policy', "default-src *  data: blob: filesystem: about: ws: wss: 'unsafe-inline' 'unsafe-eval' 'unsafe-dynamic'; script-src * data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src * data: blob: 'unsafe-inline'; img-src * data: blob: 'unsafe-inline'; frame-src * data: blob: ; style-src * data: blob: 'unsafe-inline'; font-src * data: blob: 'unsafe-inline';")
+    }
+}));
 
-app.get('/url/:id', (req, res) => {
-    // TODO: get a short url by id
-});
-
-app.get('/:id', (req, res) => {
-    // TODO: Redirect to URL
+app.get('/:id', async (req, res) => {
+    const { id: slug } = req.params;
+    try {
+        const url = await urls.findOne({ slug });
+        if (url) {
+            res.redirect(url.url);
+        }
+        res.redirect(`/?error=${slug} not fund`);
+    } catch (error) {
+        res.redirect(`/?error=Link not found`);
+    }
 });
 
 const schema = yup.object().shape({
@@ -74,7 +83,7 @@ app.use((error, req, res, next) => {
     });
 });
 
-const port = process.env.port || 7766;
+const port = process.env.PORT || 7766;
 
 app.listen(port, () => {
     console.log(`Listening at http://localhost:${port}`);
